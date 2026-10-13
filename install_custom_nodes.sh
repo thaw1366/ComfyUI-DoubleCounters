@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Run synchronously BEFORE ComfyUI starts. Requires bash and git.
+# Host this .sh file at a public direct-download URL; no API keys are needed.
+set -Eeuo pipefail
+trap 'echo "[custom-nodes] FAILED at line $LINENO. See the error above." >&2' ERR
+export GIT_TERMINAL_PROMPT=0
+
+# Edit this list to add or remove public custom-node repositories.
+NODE_REPOS=(
+    "https://github.com/rgthree/rgthree-comfy.git"
+    "https://github.com/kijai/ComfyUI-KJNodes.git"
+    "https://github.com/ltdrdata/ComfyUI-Impact-Pack.git"
+    "https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git"
+    "https://github.com/yolain/ComfyUI-Easy-Use.git"
+    "https://github.com/crystian/ComfyUI-Crystools.git"
+    "https://github.com/jags111/efficiency-nodes-comfyui.git"
+    "https://github.com/cubiq/ComfyUI_essentials.git"
+    "https://github.com/TinyTerra/ComfyUI_tinyterraNodes.git"
+    "https://github.com/ltdrdata/was-node-suite-comfyui.git"
+    "https://github.com/alexopus/ComfyUI-Image-Saver.git"
+    "https://github.com/HellerCommaA/ComfyUI-MetadataStripper.git"
+    "https://github.com/thaw1366/ComfyUI-DoubleCounters.git"
+)
+
+# Optional overrides: set these in your pod environment or edit here.
+# COMFYUI_DIR=/workspace/madapps/ComfyUI
+# COMFYUI_PYTHON=/workspace/madapps/ComfyUI/.venv/bin/python
+# Existing repositories stay at their current version by default.
+UPDATE_NODES="${UPDATE_NODES:-0}"
+[[ "$UPDATE_NODES" == 0 || "$UPDATE_NODES" == 1 ]] || {
+    echo "UPDATE_NODES must be 0 or 1" >&2; exit 1;
+}
+
+if (( ${#NODE_REPOS[@]} == 0 )); then
+    echo "[custom-nodes] No repositories configured; skipping."
+    exit 0
+fi
+
+if [[ -z "${COMFYUI_DIR:-}" ]]; then
+    for candidate in /ComfyUI /workspace/madapps/ComfyUI /workspace/ComfyUI /app/ComfyUI; do
+        if [[ -f "$candidate/main.py" && -d "$candidate/custom_nodes" ]]; then
+            COMFYUI_DIR="$candidate"
+            break
+        fi
+    done
+fi
+if [[ -z "${COMFYUI_DIR:-}" || ! -f "$COMFYUI_DIR/main.py" ]]; then
+    echo "[custom-nodes] Set COMFYUI_DIR to your ComfyUI installation." >&2
+    exit 1
+fi
+COMFYUI_DIR="$(cd "$COMFYUI_DIR" && pwd)"
+
+if [[ -z "${COMFYUI_PYTHON:-}" ]]; then
+    if [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python" ]]; then
+        COMFYUI_PYTHON="$VIRTUAL_ENV/bin/python"
+    else
+        for candidate in "$COMFYUI_DIR/.venv/bin/python" "$COMFYUI_DIR/venv/bin/python" /workspace/madapps/venv/bin/python /opt/venv/bin/python; do
+            if [[ -x "$candidate" ]]; then
+                COMFYUI_PYTHON="$candidate"
+                break
+            fi
+        done
+    fi
+fi
+COMFYUI_PYTHON="${COMFYUI_PYTHON:-python3}"
+command -v git >/dev/null
+"$COMFYUI_PYTHON" -m pip --version
+echo "[custom-nodes] ComfyUI: $COMFYUI_DIR"
+echo "[custom-nodes] Python: $COMFYUI_PYTHON (must match ComfyUI's launcher)"
+mkdir -p "$COMFYUI_DIR/custom_nodes"
+
+for repo in "${NODE_REPOS[@]}"; do
+    [[ "$repo" == https://* && "$repo" != *'?'* && "$repo" != *'#'* ]] || {
+        echo "[custom-nodes] Use an HTTPS Git repository URL without query/fragment." >&2
+        exit 1
+    }
+    name="${repo##*/}"
+    name="${name%.git}"
+    [[ "$name" =~ ^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$ ]] || {
+        echo "[custom-nodes] Invalid repository folder name." >&2; exit 1;
+    }
+    destination="$COMFYUI_DIR/custom_nodes/$name"
+    if [[ -e "$destination" || -L "$destination" ]]; then
+        [[ -d "$destination/.git" ]] || {
+            echo "[custom-nodes] $destination exists but is not a Git clone; refusing to overwrite." >&2
+            exit 1
+        }
+        origin="$(git -C "$destination" remote get-url origin)"
+        [[ "${origin%.git}" == "${repo%.git}" ]] || {
+            echo "[custom-nodes] Repository origin differs for $name; refusing to overwrite." >&2
+            exit 1
+        }
+        if [[ "$UPDATE_NODES" == 1 ]]; then
+            [[ -z "$(git -C "$destination" status --porcelain)" ]] || {
+                echo "[custom-nodes] $name has local changes; refusing to update." >&2; exit 1;
+            }
+            git -C "$destination" pull --ff-only
+        else
+            echo "[custom-nodes] $name already installed; keeping current version."
+        fi
+    else
+        # Clone to a temporary sibling so interrupted clones do not leave a broken node.
+        temporary="$(mktemp -d "$COMFYUI_DIR/custom_nodes/.install-${name}.XXXXXX")"
+        if git clone --depth 1 "$repo" "$temporary"; then
+            mv "$temporary" "$destination"
+        else
+            rm -rf -- "$temporary"
+            echo "[custom-nodes] Clone failed for $name." >&2
+            exit 1
+        fi
+    fi
+    if [[ -f "$destination/requirements.txt" ]]; then
+        # Run each startup: persistent nodes can outlive a container's Python environment.
+        (cd "$destination" && "$COMFYUI_PYTHON" -m pip install -r requirements.txt)
+    fi
+    if [[ "$name" == "ComfyUI-Impact-Pack" && -f "$destination/install.py" ]]; then
+        (cd "$destination" && COMFYUI_PATH="$COMFYUI_DIR" "$COMFYUI_PYTHON" install.py)
+    fi
+    # Some nodes also require install.py, system packages, or model downloads.
+    # Add their documented extra commands here using COMFYUI_PYTHON for Python.
+    echo "[custom-nodes] Ready: $name"
+done
+echo "[custom-nodes] Finished; the pod launcher can now start ComfyUI."
