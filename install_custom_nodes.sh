@@ -184,7 +184,8 @@ for repo in "${NODE_REPOS[@]}"; do
             echo "[custom-nodes] Repository origin differs for $name; refusing to overwrite." >&2
             exit 1
         }
-        if [[ "$UPDATE_NODES" == 1 ]]; then
+        # Always refresh the user's node so workflow compatibility fixes are applied.
+        if [[ "$UPDATE_NODES" == 1 || "$name" == "ComfyUI-DoubleCounters" ]]; then
             [[ -z "$(git -C "$destination" status --porcelain)" ]] || {
                 echo "[custom-nodes] $name has local changes; refusing to update." >&2; exit 1;
             }
