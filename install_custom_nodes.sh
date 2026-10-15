@@ -215,4 +215,33 @@ for repo in "${NODE_REPOS[@]}"; do
     # Add their documented extra commands here using COMFYUI_PYTHON for Python.
     echo "[custom-nodes] Ready: $name"
 done
+
+# This file doubles as a YAM import script. MANAGER_IMPORT_SCRIPT_URL parses
+# the cmm-record/download below without executing the custom-node installer.
+# SETUP_SCRIPT_URL executes everything, including this model download.
+# Remove this version ID from CHECKPOINT_IDS_TO_DOWNLOAD to avoid a second
+# copy in models/checkpoints. Existing files there are not moved or deleted.
+# Setup-only opt-out: DOWNLOAD_DIFFUSION_MODEL=0.
+download_diffusion_model() {
+    [[ "${DOWNLOAD_DIFFUSION_MODEL:-1}" != 0 ]] || {
+        echo "[models] Diffusion-model download disabled."
+        return 0
+    }
+    command -v comfy-model-manager >/dev/null 2>&1 || {
+        echo "[models] comfy-model-manager is required for diffusion-model downloads." >&2
+        return 1
+    }
+    # Use the installation detected above, including YAW's /ComfyUI fallback.
+    export MANAGER_COMFYUI_DIR="$COMFYUI_DIR"
+    export MANAGER_NETWORK_VOLUME="${MANAGER_NETWORK_VOLUME:-${YAW_NETWORK_VOLUME:-${NETWORK_VOLUME:-/workspace}}}"
+    if [[ "$MANAGER_NETWORK_VOLUME" == /workspace && ! -d /workspace ]]; then
+        export MANAGER_NETWORK_VOLUME=/
+    fi
+    echo "[models] Ensuring diffusion model is available in $MANAGER_COMFYUI_DIR/models/diffusion_models"
+    # Let YAM handle authentication, existing payloads, size and checksum checks.
+# cmm-record: {"autoDownload":true,"displayName":"FinePorn v5 - INT8/BF16/NVFP4 (v4)","expectedBytes":13141769675,"expectedSha256":"2c77313e3169da833a2f545a9eb73bcb5bd6f7196b39ecd786e4026dec58d21e","filename":"finepornV5INT8BF16_v4_3068237.safetensors","id":"d5e55dab-b5d4-4da1-88a8-ac5317bd3da5","recordOrigin":"user","source":"3187539","sourceType":"civitai","targetKey":"models/diffusion_models"}
+    comfy-model-manager download --source '3187539' --target-key 'models/diffusion_models' --filename 'finepornV5INT8BF16_v4_3068237.safetensors' --record-id 'd5e55dab-b5d4-4da1-88a8-ac5317bd3da5' --kind 'civitai' --expected-bytes 13141769675 --expected-sha256 '2c77313e3169da833a2f545a9eb73bcb5bd6f7196b39ecd786e4026dec58d21e'
+}
+download_diffusion_model
+
 echo "[custom-nodes] Finished; the pod launcher can now start ComfyUI."
