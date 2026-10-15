@@ -77,6 +77,71 @@ echo "[custom-nodes] ComfyUI: $COMFYUI_DIR"
 echo "[custom-nodes] Python: $COMFYUI_PYTHON (must match ComfyUI's launcher)"
 mkdir -p "$COMFYUI_DIR/custom_nodes"
 
+# ComfyUI Manager reads these from config.ini, not environment variables.
+# Default to enabling Git URL installs for this user's remote RunPod pod.
+ENABLE_MANAGER_GIT_URL_INSTALL="${ENABLE_MANAGER_GIT_URL_INSTALL:-1}"
+[[ "$ENABLE_MANAGER_GIT_URL_INSTALL" == 0 || "$ENABLE_MANAGER_GIT_URL_INSTALL" == 1 ]] || {
+    echo "ENABLE_MANAGER_GIT_URL_INSTALL must be 0 or 1" >&2; exit 1;
+}
+if [[ "$ENABLE_MANAGER_GIT_URL_INSTALL" == 1 ]]; then
+    manager_config="$COMFYUI_DIR/user/__manager/config.ini"
+    legacy_manager_config="$COMFYUI_DIR/user/default/ComfyUI-Manager/config.ini"
+    if [[ -f "$legacy_manager_config" && ! -f "$manager_config" ]]; then
+        manager_config="$legacy_manager_config"
+    fi
+    mkdir -p "$(dirname "$manager_config")"
+    "$COMFYUI_PYTHON" - "$manager_config" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+settings = {
+    "allow_git_url_install": "true",
+    "network_mode": "personal_cloud",
+}
+out = []
+in_default = False
+found_default = False
+seen = set()
+
+def append_missing():
+    for key, value in settings.items():
+        if key not in seen:
+            out.append(f"{key} = {value}")
+            seen.add(key)
+
+for line in lines:
+    section = re.match(r"^\s*\[([^]]+)\]", line)
+    if section:
+        if in_default:
+            append_missing()
+        in_default = section.group(1).strip().lower() == "default"
+        found_default = found_default or in_default
+        out.append(line)
+        continue
+    if in_default:
+        setting = re.match(r"^(\s*)(allow_git_url_install|network_mode)(\s*=).*$", line, re.I)
+        if setting:
+            key = setting.group(2).lower()
+            out.append(f"{setting.group(1)}{key}{setting.group(3)} {settings[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+
+if in_default:
+    append_missing()
+elif not found_default:
+    if out and out[-1].strip():
+        out.append("")
+    out.extend(["[default]", "allow_git_url_install = true", "network_mode = personal_cloud"])
+
+path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+print(f"[custom-nodes] Enabled Manager Git URL installs in {path}")
+PY
+fi
+
 for repo in "${NODE_REPOS[@]}"; do
     [[ "$repo" == https://* && "$repo" != *'?'* && "$repo" != *'#'* ]] || {
         echo "[custom-nodes] Use an HTTPS Git repository URL without query/fragment." >&2
