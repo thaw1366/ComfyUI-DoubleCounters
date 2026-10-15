@@ -19,7 +19,8 @@ NODE_REPOS=(
     "https://github.com/ltdrdata/was-node-suite-comfyui.git"
     "https://github.com/alexopus/ComfyUI-Image-Saver.git"
     "https://github.com/HellerCommaA/ComfyUI-MetadataStripper.git"
-    "https://github.com/thaw1366/ComfyUI-DoubleCounters.git"
+    "https://github.com/thaw1366/ComfyUI-DoubleCounters.git" # User-built custom node
+    "https://github.com/willmiao/ComfyUI-Lora-Manager.git"
 )
 
 # Optional overrides: set these in your pod environment or edit here.
@@ -103,7 +104,7 @@ for repo in "${NODE_REPOS[@]}"; do
         done < "$manifest"
         [[ "$locked" == true ]] && break
     done
-    if [[ "$locked" == true ]]; then
+    if [[ "$locked" == true && "$name" != "ComfyUI-DoubleCounters" ]]; then
         echo "[custom-nodes] $name is managed by YAW; preserving its pinned installation."
         continue
     fi
