@@ -36,6 +36,13 @@ if (( ${#NODE_REPOS[@]} == 0 )); then
     exit 0
 fi
 
+# YAW runs setup after moving ComfyUI to its network volume.
+if [[ -n "${YAW_NODE_MANIFESTS:-}" ]]; then
+    COMFYUI_DIR="${COMFYUI_DIR:-${YAW_NETWORK_VOLUME:-/workspace}/ComfyUI}"
+    [[ -d "${YAW_NETWORK_VOLUME:-/workspace}" ]] || COMFYUI_DIR=/ComfyUI
+    COMFYUI_PYTHON="${COMFYUI_PYTHON:-python3}"
+fi
+
 if [[ -z "${COMFYUI_DIR:-}" ]]; then
     for candidate in /ComfyUI /workspace/madapps/ComfyUI /workspace/ComfyUI /app/ComfyUI; do
         if [[ -f "$candidate/main.py" && -d "$candidate/custom_nodes" ]]; then
@@ -79,6 +86,27 @@ for repo in "${NODE_REPOS[@]}"; do
     [[ "$name" =~ ^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$ ]] || {
         echo "[custom-nodes] Invalid repository folder name." >&2; exit 1;
     }
+    # YAW's launcher verifies these pinned nodes again after this script.
+    # Keep their code and dependencies under the template's control.
+    locked=false
+    read -r -a manifests <<< "${YAW_NODE_MANIFESTS:-}"
+    for manifest in "${manifests[@]}"; do
+        [[ -r "$manifest" ]] || { echo "Unreadable lock manifest: $manifest" >&2; exit 1; }
+        while read -r locked_repo locked_ref extra; do
+            case "$locked_repo" in ''|'#'*) continue ;; esac
+            locked_name="${locked_repo##*/}"
+            locked_name="${locked_name%.git}"
+            if [[ "${locked_name,,}" == "${name,,}" ]]; then
+                locked=true
+                break
+            fi
+        done < "$manifest"
+        [[ "$locked" == true ]] && break
+    done
+    if [[ "$locked" == true ]]; then
+        echo "[custom-nodes] $name is managed by YAW; preserving its pinned installation."
+        continue
+    fi
     destination="$COMFYUI_DIR/custom_nodes/$name"
     if [[ -e "$destination" || -L "$destination" ]]; then
         [[ -d "$destination/.git" ]] || {
