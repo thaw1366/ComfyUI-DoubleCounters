@@ -98,8 +98,70 @@ class DualCounter:
         return float("nan")
 
 
+class PromptImageCounter:
+    """
+    Compatibility node used by the attached workflow. It emits an image index
+    for each image made per prompt and a zero-based prompt index.
+    """
+
+    CATEGORY = "Counters"
+    FUNCTION = "run"
+    RETURN_TYPES = ("INT", "INT")
+    RETURN_NAMES = ("image_number", "prompt_number")
+    OUTPUT_NODE = False
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images_per_prompt": ("INT", {"default": 1, "min": 1, "max": 100000, "step": 1}),
+                "image_start": ("INT", {"default": 1, "min": 0, "max": 1000000, "step": 1}),
+                "num_prompts": ("INT", {"default": 1, "min": 1, "max": 100000, "step": 1}),
+                "prompt_start": ("INT", {"default": 0, "min": 0, "max": 1000000, "step": 1}),
+                "reset": ("BOOLEAN", {"default": False}),
+            },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
+        }
+
+    def run(self, images_per_prompt, image_start, num_prompts, prompt_start, reset=False, unique_id=None):
+        images_per_prompt = max(1, int(images_per_prompt))
+        num_prompts = max(1, int(num_prompts))
+        image_start = int(image_start)
+        prompt_start = int(prompt_start)
+        key = f"PromptImageCounter:{unique_id if unique_id is not None else 'default'}"
+
+        if reset:
+            current_image = image_start
+            current_prompt = prompt_start
+        else:
+            state = _state.get(key, {})
+            current_image = int(state.get("image_number", image_start))
+            current_prompt = int(state.get("prompt_number", prompt_start))
+            current_image = image_start + ((current_image - image_start) % images_per_prompt)
+            current_prompt = prompt_start + ((current_prompt - prompt_start) % num_prompts)
+
+        next_image = current_image + 1
+        next_prompt = current_prompt
+        if next_image >= image_start + images_per_prompt:
+            next_image = image_start
+            next_prompt += 1
+            if next_prompt >= prompt_start + num_prompts:
+                next_prompt = prompt_start
+
+        _state[key] = {"image_number": next_image, "prompt_number": next_prompt}
+        _save_state(_state)
+        return (current_image, current_prompt)
+
+    @classmethod
+    def IS_CHANGED(cls, images_per_prompt, image_start, num_prompts, prompt_start, reset=False, unique_id=None):
+        return float("nan")
+
+
 NODE_CLASS_MAPPINGS = {
     "DualCounter": DualCounter,
+    "PromptImageCounter": PromptImageCounter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
