@@ -49,6 +49,10 @@ passes have been generated.
 | counter_1_index0  | INT  | 0-indexed (`counter_1 - 1`). Wire this in instead if your String Selector node is 0-indexed. |
 | counter_2         | INT  | Increments once per full pass through the list. Handy as a seed offset, filename suffix, or subfolder index. |
 
+## PromptImageCounter workflow compatibility
+
+This repository also registers the legacy node type `PromptImageCounter` used by older workflows. It outputs `image_number` (cycles through `images_per_prompt`) and a zero-based `prompt_number` (cycles through `num_prompts`). The `image_start` and `prompt_start` inputs set the first values; toggle `reset` for one run to restart the cycle.
+
 ## Installation
 
 1. Copy this whole `ComfyUI-DoubleCounters` folder into your ComfyUI
