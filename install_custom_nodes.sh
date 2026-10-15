@@ -241,6 +241,8 @@ download_diffusion_model() {
     # Let YAM handle authentication, existing payloads, size and checksum checks.
 # cmm-record: {"autoDownload":true,"displayName":"FinePorn v5 - INT8/BF16/NVFP4 (v4)","expectedBytes":13141769675,"expectedSha256":"2c77313e3169da833a2f545a9eb73bcb5bd6f7196b39ecd786e4026dec58d21e","filename":"finepornV5INT8BF16_v4_3068237.safetensors","id":"d5e55dab-b5d4-4da1-88a8-ac5317bd3da5","recordOrigin":"user","source":"3187539","sourceType":"civitai","targetKey":"models/diffusion_models"}
     comfy-model-manager download --source '3187539' --target-key 'models/diffusion_models' --filename 'finepornV5INT8BF16_v4_3068237.safetensors' --record-id 'd5e55dab-b5d4-4da1-88a8-ac5317bd3da5' --kind 'civitai' --expected-bytes 13141769675 --expected-sha256 '2c77313e3169da833a2f545a9eb73bcb5bd6f7196b39ecd786e4026dec58d21e'
+# cmm-record: {"autoDownload":true,"displayName":"FinePorn v5 - V5 FP8","expectedBytes":13141769680,"expectedSha256":"1be696a2e3730de539e17fba5e3f8ce1cdb3d5f5653708d90b2ed0d6679f5879","filename":"finepornV5INT8BF16_v5FP8.safetensors","id":"civitai-3361846-diffusion","recordOrigin":"user","source":"3361846","sourceType":"civitai","targetKey":"models/diffusion_models"}
+    comfy-model-manager download --source '3361846' --target-key 'models/diffusion_models' --filename 'finepornV5INT8BF16_v5FP8.safetensors' --record-id 'civitai-3361846-diffusion' --kind 'civitai' --expected-bytes 13141769680 --expected-sha256 '1be696a2e3730de539e17fba5e3f8ce1cdb3d5f5653708d90b2ed0d6679f5879'
 }
 download_diffusion_model
 
